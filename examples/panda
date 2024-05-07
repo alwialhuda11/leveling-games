@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH << File.dirname(__FILE__) + '/../lib/'
+require 'xgame'
+require 'xgame/chipmunk'
+
+XGame('The Panda') { |screen, world, listeners|
+
+	# Set up the world
+	world.extend(Rubygame::Sprites::ChipmunkPhysicsSpaceGroup) # The world has physics
+	world.bound(screen, [:top, :bottom, :left, :right]) # Keep sprites on the screen
+	world.damping = 0.5 # Set up basic air resistance
+	world.gravity = 100 # Set a gravity constant
+	
+	#Set the background
+	Rubygame::Surface['xback.png'].zoom_to(screen.width, screen.height).blit(world.background, [0, 0])
+
+	# Create a sprite and push it into the world
+	# It's important to have the world set up *before* you do this
+	# This sprite will have a mass of 5 and infinite angular resistance (it does not rotate)
+	panda = Rubygame::Sprites::ChipmunkPhysicsSprite.new(10, screen.height-60, 5, CP::INFINITY, 'panda.png')
+	world.push panda
+
+	# Set up event listeners
+
+	listeners.addEventListener(Rubygame::KeyDownEvent) { |event|
+			case event.key
+				when Rubygame::K_ESCAPE
+					throw :quit #quit when the user hits escape
+				when Rubygame::K_RIGHT
+					panda.go([30,nil])
+				when Rubygame::K_LEFT
+					panda.go([-30,nil])
+				when Rubygame::K_UP
+					panda.jump(world.gravity * -7)
+			end
+	}
+
+	listeners.addEventListener(Rubygame::KeyUpEvent) { |event|
+			case event.key
+				when Rubygame::K_RIGHT
+					panda.stop(:right)
+				when Rubygame::K_LEFT
+					panda.stop(:left)
+			end
+	}
+
+}

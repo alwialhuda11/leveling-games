@@ -1,0 +1,160 @@
+#!/bin/sh
+
+# Parse options
+while [ $# -gt 0 ]; do
+	optarg="`expr "x$1" : 'x[^=]*=\(.*\)'`"
+	case "$1" in
+		--prefix=*)
+			PREFIX="$optarg"
+			shift
+		;;
+		--packaging)
+			PACKAGING=1
+			shift
+		;;
+		*)
+			shift
+		;;
+	esac
+done
+
+VERSION="0.1.0" # NOTE: Remember to update in XGame::VERSION as well, and xgame.gemspec
+
+# Verify presence of ruby
+RUBY=`which ruby` # XXX: we're assuming which is in PATH
+if [ $? -ne 0 ]; then
+	echo "ERROR: ruby not found" 1>&2
+	exit 1
+else
+	echo "Ruby found at $RUBY"
+fi
+
+# Verify ruby version
+RUBYMAJOR=`"$RUBY" -v | cut -d' ' -f2 | cut -b1`
+RUBYMINOR=`"$RUBY" -v | cut -d' ' -f2 | cut -b3`
+if [ $RUBYMAJOR -lt 1 -o $RUBYMINOR -lt 8 ]; then
+	echo "ERROR: ruby version $RUBYMAJOR.$RUBYMINOR.x too low, need at least 1.8.0" 1>&2
+	exit 1
+else
+	echo "Ruby version $RUBYMAJOR.$RUBYMINOR.x"
+fi
+
+# Verify RubyGame and version
+"$RUBY" <<EOT
+begin
+	begin
+		require 'rubygame'
+	rescue LoadError
+		require 'rubygems'
+		require 'rubygame'
+		warn 'WARNING: RubyGems is required for RubyGame on your system'
+	end
+rescue LoadError
+	warn 'ERROR: RubyGame not found'
+	exit 1
+end
+
+if Rubygame::VERSIONS[:rubygame][0] >= 2 and Rubygame::VERSIONS[:rubygame][1] >= 3
+	puts "Rubygame version #{Rubygame::VERSIONS[:rubygame].join('.')}"
+	exit 0
+else
+	warn "ERROR: Rubygame version #{Rubygame::VERSIONS[:rubygame].join('.')} is too low, need at least 2.3.0"
+	exit 1
+end
+EOT
+if [ $? != 0 ]; then
+	exit 1
+fi
+
+# Verify Chipmunk and version
+"$RUBY" <<EOT
+begin
+	begin
+		require 'chipmunk'
+	rescue LoadError
+		require 'rubygems'
+		require 'chipmunk'
+		warn 'WARNING: RubyGems is required for Chipmunk on your system'
+	end
+rescue LoadError
+	warn 'ERROR: Chipmunk not found'
+	exit 1
+end
+
+begin
+	CP::Vec2.new(0,0) # try to do something basic, Chipmunk has no good version indicator
+	puts 'Chipmunk found'
+rescue Exception
+	warn 'ERROR: Your version of Chipmunk is no good, must be at least 4.0.0'
+	exit 1
+end
+
+exit 0
+EOT
+if [ $? != 0 ]; then
+	exit 1
+fi
+
+XGAME=`"$RUBY" -c lib/xgame.rb | grep "Syntax OK"`
+if [ "." = "$XGAME." ]; then
+	echo "ERROR: XGame source tree corrupted" 1>&2
+	exit 1
+else
+	"$RUBY" <<EOT
+require 'lib/xgame'
+if XGame::VERSION.join('.') == '$VERSION'
+	puts "XGame $VERSION present"
+	exit 0
+else
+	warn "ERROR: XGame version #{XGame::VERSION.join('.')} does not match this script $VERSION"
+	exit 1
+end
+EOT
+	if [ $? != 0 ]; then
+		exit 1
+	fi
+fi
+
+if [ "$PREFIX." = "." -o "$PREFIX" = "/usr/local" ]; then
+	INSTALLDIR=`echo "require 'rbconfig'; puts Config::CONFIG['sitedir'].sub(Regexp.new('^$PREFIX\/?'),'')" | "$RUBY"`
+else
+	INSTALLDIR=`echo "require 'rbconfig'; puts Config::CONFIG['rubylibdir'].sub(Regexp.new('^$PREFIX\/?'),'')" | "$RUBY"`
+fi
+
+GEMBUILD=""
+GEMINSTALL=""
+GEMREMOVE=""
+GEM=`which gem` # XXX: we're assuming which is in PATH
+if [ "." != "$GEM." ]; then
+	GEMBUILD="$GEM build xgame.gemspec"
+	GEMREMOVE="$GEM uninstall xgame"
+	if [ "." = "$PACKAGING." ]; then
+		GEMINSTALL="$GEM install xgame-$VERSION.gem"
+	else
+		#GEMINSTALL="cp xgame-$VERSION.gem '\$(prefix)/$INSTALLDIR/xgame.gem'"
+		#GEMINSTALL="mkdir -p '\$(prefix)/../tmp/'; cp xgame-$VERSION.gem '\$(prefix)/../tmp/xgame.gem'" # XXX: This assumes prefix is only one level deeper than we want... hmm...
+		GEMINSTALL=""
+	fi
+fi
+
+cat 1>Makefile <<EOT
+prefix=$PREFIX
+all: gem lib/xgame.rb
+	"$RUBY" -c "lib/xgame.rb"
+xgame-$VERSION.gem: xgame.gemspec
+	$GEMBUILD
+gem: xgame-$VERSION.gem
+clean:
+	rm -f xgame-$VERSION.gem
+distclean: clean
+	rm -f Makefile
+install: all
+	mkdir -p "\$(prefix)/$INSTALLDIR/"
+	cp "lib/xgame.rb" "\$(prefix)/$INSTALLDIR/xgame.rb"
+	$GEMINSTALL
+uninstall:
+	rm -f "$SITEDIR/xgame.rb"
+	$GEMREMOVE
+test: all
+	cd tests; $RUBY -T2 xgame_test.rb; cd ..
+EOT

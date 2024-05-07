@@ -1,0 +1,96 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH << File.dirname(__FILE__) + '/../lib/'
+require 'xgame'
+require 'xgame/chipmunk'
+
+XGame('Spider Panda') { |screen, world, listeners|
+
+	class Panda < Rubygame::Sprites::ChipmunkPhysicsSprite
+
+		def initialize(*args)
+			super
+			@shape.collision_type = :panda
+			@orig = @image
+		end
+
+		def r(direction)
+			if direction == :left
+				@image = @orig.rotozoom(-90,1)
+			end
+			if direction == :right
+				@image = @orig.rotozoom(90,1)
+			end
+			if direction == :up
+				@image = @orig.rotozoom(180,1)
+			end
+			if direction == :down
+				@image = @orig
+			end
+			@rect = Rubygame::Rect.new(@rect.x,@rect.y,*@image.size)
+		end
+
+	end
+
+	# Set up the world
+	world.extend(Rubygame::Sprites::ChipmunkPhysicsSpaceGroup) # The world has physics
+	world.gravity = 100
+	world.bound(screen, [:top, :bottom, :left, :right]) # Keep sprites on the screen
+	world.damping = 0.5 # Set up basic air resistance
+
+	# Create a sprite and push it into the world
+	panda = Panda.new(10, screen.height-60, 5, CP::INFINITY, 'panda.png')
+	world.push panda
+
+	# Set up event listeners
+
+	listeners.addEventListener(Rubygame::CollisionEvent.new(:panda, :wall)) { |by, to|
+		by.reset_jumps # Must reset jumps since we've changed the panda's collision type
+		if to.bb.t == screen.height and to.bb.b == screen.height
+			world.gravity = [0,100]
+			panda.r :down
+		elsif to.bb.t == 0 and to.bb.b == 0
+			world.gravity = [0, -100]
+			panda.r :up
+		elsif to.bb.l == 0 and to.bb.t == screen.height
+			world.gravity = [-100,0]
+			panda.r :left
+		elsif to.bb.l == screen.width and to.bb.r == screen.width
+			world.gravity = [100,0]
+			panda.r :right
+		end
+	}
+
+	listeners.addEventListener(Rubygame::KeyDownEvent) { |event|
+			case event.key
+				when Rubygame::K_ESCAPE
+					throw :quit #quit when the user hits escape
+				when Rubygame::K_RIGHT
+					panda.jump(world.gravity * -7) if world.gravity.x == -100
+					panda.go([50,nil])
+				when Rubygame::K_LEFT
+					panda.jump(world.gravity * -7) if world.gravity.x == 100
+					panda.go([-50,nil])
+				when Rubygame::K_UP
+					panda.jump(world.gravity * -7) if world.gravity.y == 100
+					panda.go([nil,-50])
+				when Rubygame::K_DOWN
+					panda.jump(world.gravity * -7) if world.gravity.y == -100
+					panda.go([nil,50])
+			end
+	}
+
+	listeners.addEventListener(Rubygame::KeyUpEvent) { |event|
+			case event.key
+				when Rubygame::K_RIGHT
+					panda.stop(:right)
+				when Rubygame::K_LEFT
+					panda.stop(:left)
+				when Rubygame::K_UP
+					panda.stop(:up)
+				when Rubygame::K_DOWN
+					panda.stop(:down)
+			end
+	}
+
+}

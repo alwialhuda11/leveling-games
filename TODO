@@ -1,0 +1,13 @@
+Run `git grep -e TODO: -e XXX: -e FIXME:` to see notes about cleanup in the source.
+ 
+* Scrollable background (psycotica0 is working on this)
+* Board game-style demo + other demos
+* Continue to improve self-documentation of code and RDoc
+* EventListeners needs to wrap the new event stuff in rubygame2.4 -- the rubygame stuff is ugly raw though (Low priority until rubygame2.4 is official)
+* Music/SFX wrapper/demo/tests?
+ 
+* Python port
+* C port
+* DOMScripting (aka JavaScript) port?
+* C++ port?
+* Java port?

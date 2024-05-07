@@ -1,0 +1,92 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH << File.dirname(__FILE__) + '/../lib/'
+require 'xgame'
+require 'xgame/chipmunk'
+
+XGame('Two Pandas!') { |screen, world, listeners|
+
+	class Panda < Rubygame::Sprites::ChipmunkPhysicsSprite
+		def default_image; Rubygame::Surface['panda.png']; end;
+	end
+
+	class Platform < Rubygame::Sprites::ChipmunkPhysicsSprite
+
+		def default_image; Rubygame::Surface['platform.png']; end;
+
+		def initialize(x, y, s=nil, e=nil, v=nil)
+			super(x, y, CP::INFINITY, CP::INFINITY)
+			@s = s
+			@e = e
+			@v = v
+			@shape.collision_type = :wall
+		end
+
+		def update(time)
+			super
+			@shape.body.update_position(time/1000.0)
+			if @s and @e and @v
+				x = @shape.body.p.x
+				y = @shape.body.p.y
+				@v[0] *= -1 if x > @e[0] or x < @s[0]
+				@v[1] *= -1 if y > @e[1] or y < @s[1]
+				@shape.body.v = CP::Vec2.new(@v[0], @v[1])
+			end
+		end
+
+	end # Platform
+
+	# Set up the world
+	world.extend(Rubygame::Sprites::ChipmunkPhysicsSpaceGroup) # The world has physics
+	world.bound(screen, [:top, :bottom, :left, :right]) # Keep sprites on the screen
+	world.damping = 0.5 # Set up basic air resistance
+	world.gravity = 100 # Set a gravity constant
+	
+	#Set the background
+	Rubygame::Surface['xback.png'].zoom_to(screen.width, screen.height).blit(world.background, [0, 0])
+
+	# Instantiate sprites and push them onto the world
+
+	panda = Panda.new(10, screen.height-70, 5, CP::INFINITY)
+	panda2 = Panda.new(200, screen.height-70, 5, CP::INFINITY)
+
+	platform = Platform.new(100, screen.height-panda.rect.height*1.2)
+	platform2 = Platform.new(150, screen.height-panda.rect.height*1.2*2, [150,400],[400,400],[50,0])
+
+	world.push panda, panda2, platform, platform2
+
+	# Set up event listeners
+
+	listeners.addEventListener(Rubygame::KeyDownEvent) { |event|
+			case event.key
+				when Rubygame::K_ESCAPE
+					throw :quit #quit when the user hits escape
+				when Rubygame::K_RIGHT
+					panda.go([30,nil])
+				when Rubygame::K_LEFT
+					panda.go([-30,nil])
+				when Rubygame::K_UP
+					panda.jump(world.gravity * -8)
+				when Rubygame::K_D
+					panda2.go([30,nil])
+				when Rubygame::K_A
+					panda2.go([-30,nil])
+				when Rubygame::K_W # This does not work right on my Dvorak keyboard. GNOME shift+shift is not respected. Needs configurable.
+					panda2.jump(world.gravity * -8)
+			end
+	}
+
+	listeners.addEventListener(Rubygame::KeyUpEvent) { |event|
+			case event.key
+				when Rubygame::K_RIGHT
+					panda.stop(:right)
+				when Rubygame::K_LEFT
+					panda.stop(:left)
+				when Rubygame::K_D
+					panda2.stop(:right)
+				when Rubygame::K_A
+					panda2.stop(:left)
+			end
+	}
+
+}
